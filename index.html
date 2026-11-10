@@ -268,7 +268,7 @@ footer{color:var(--muted);font-size:.76rem}
   function wrongs(){return [3,4].filter(function(i){return st.marks[i]&&st.marks[i].v==="ok"})}
   function rules(){var seen={},out=[];flagged().forEach(function(i){var r=st.marks[i].r;if(!seen[r]){seen[r]=1;out.push({reason:r,from:[i]})}else{out.filter(function(o){return o.reason===r})[0].from.push(i)}});return out}
   function picked(){return rules().filter(function(r){return !st.off[r.reason]})}
-  function replayed(){return st.seen[3]&&st.seen[4]}
+  function replayed(){return (st.seen[3]&&st.seen[4])||st.step>1}
 
   function chart(i){
     var f=STEPS[i].focus, h="";
