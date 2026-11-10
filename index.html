@@ -1,0 +1,404 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Alterra Labs Concept · Gaurav Basantani</title>
+<meta name="description" content="Where the model went wrong: a clinician replays an AI agent's run, marks where its judgment failed, and turns each mark into a scoring rule. An unofficial concept by Gaurav Basantani.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Inter+Tight:wght@600;700;800&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: the product screen is the page. One grading app window (steps | main step | "Grading progress" panel), a story strip above, one proof strip below. */
+:root{
+  --bg:#edf2f4; --window:#ffffff; --panel:#f5f8f9; --ink:#111b21; --muted:#56656d; --line:#dde5e8;
+  --accent:#0e7490; --accent-ink:#ffffff; --accent-soft:#e0f2f7;
+  --ok:#14794b; --ok-soft:#dff3e8; --warn:#8a5a00; --warn-soft:#fdf0d5; --bad:#b42318; --bad-soft:#fde7e4; --off:#9eabb1;
+  --shadow:0 1px 2px rgba(17,27,33,.05),0 14px 34px rgba(17,27,33,.09);
+  --sans:"Inter",system-ui,-apple-system,sans-serif; --display:"Inter Tight","Inter",system-ui,sans-serif; --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0b1114; --window:#131b20; --panel:#0f161a; --ink:#e5edf0; --muted:#97a7ae; --line:#24323a;
+  --accent:#67d4ea; --accent-ink:#06222b; --accent-soft:#12303a;
+  --ok:#7fdcae; --ok-soft:#14301f; --warn:#f2c46b; --warn-soft:#382c11; --bad:#ff9a8f; --bad-soft:#3a1714; --off:#5a6870; --shadow:none; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0b1114; --window:#131b20; --panel:#0f161a; --ink:#e5edf0; --muted:#97a7ae; --line:#24323a;
+  --accent:#67d4ea; --accent-ink:#06222b; --accent-soft:#12303a;
+  --ok:#7fdcae; --ok-soft:#14301f; --warn:#f2c46b; --warn-soft:#382c11; --bad:#ff9a8f; --bad-soft:#3a1714; --off:#5a6870; --shadow:none; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:15px/1.45 var(--sans);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:28px 56px}
+.wrap{max-width:1120px;margin:0 auto;display:grid;gap:22px}
+p,h1,h2,h3{margin:0}
+.head{display:flex;justify-content:space-between;align-items:end;gap:16px;flex-wrap:wrap}
+.eyebrow{font:500 .72rem var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--accent)}
+h1{font:800 clamp(1.6rem,3.4vw,2.3rem)/1.08 var(--display);letter-spacing:-.025em;margin-top:6px;text-wrap:balance}
+.sub{color:var(--muted);margin-top:6px;font-size:1rem;max-width:62ch}
+.by{font:500 .78rem var(--mono);color:var(--muted);text-align:right}
+.by a{color:var(--ink);text-decoration:none;border-bottom:1px solid var(--line)}
+@media(max-width:600px){.by{text-align:left}}
+/* story strip */
+.story{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));background:var(--window);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+@media(max-width:760px){.story{grid-template-columns:1fr}}
+.beat{padding:16px 18px;display:grid;gap:6px;align-content:start}
+.beat+.beat{border-left:1px solid var(--line)}
+@media(max-width:760px){.beat+.beat{border-left:0;border-top:1px solid var(--line)}}
+.beat .k{display:flex;align-items:center;gap:8px;font:600 .72rem var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.beat .k i{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-style:normal;font-size:.72rem;background:var(--panel);border:1px solid var(--line);color:var(--ink)}
+.beat.p .k{color:var(--warn)}.beat.p .k i{background:var(--warn-soft);border-color:transparent;color:var(--warn)}
+.beat.i .k{color:var(--accent)}.beat.i .k i{background:var(--accent-soft);border-color:transparent;color:var(--accent)}
+.beat.r .k{color:var(--ok)}.beat.r .k i{background:var(--ok-soft);border-color:transparent;color:var(--ok)}
+.beat p{font-size:.95rem;line-height:1.45}
+@media(max-width:620px){.beat{padding:12px 14px;gap:4px}.beat p{font-size:.88rem}}
+/* narrator */
+.guide{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:center;padding:10px 18px;background:var(--accent-soft);border-bottom:1px solid var(--line)}
+@media(max-width:620px){.guide{grid-template-columns:1fr;gap:8px}}
+.guide .tag{font:600 .66rem var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--accent);background:var(--window);border-radius:6px;padding:4px 7px;justify-self:start}
+.guide p{font-size:.9rem;line-height:1.4}
+.guide p b{font-weight:600}
+.guide p span{color:var(--muted)}
+.guide .btn{min-height:34px;padding:6px 12px;font-size:.82rem;white-space:nowrap;justify-self:start}
+/* window */
+.window{background:var(--window);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);overflow:hidden}
+.bar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 18px;border-bottom:1px solid var(--line)}
+.org{display:flex;align-items:center;gap:10px;font-size:.88rem;color:var(--muted);min-width:0}
+.org b{color:var(--ink);font-weight:600}
+.logo{width:28px;height:28px;border-radius:8px;background:var(--ink);color:var(--window);display:grid;place-items:center;font:700 .8rem var(--display);flex:none}
+.steps{display:flex;gap:4px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:3px;max-width:100%}
+.steps button{font:600 .8rem var(--sans);border:0;background:transparent;color:var(--muted);border-radius:7px;padding:6px 12px;cursor:pointer;min-height:32px;display:flex;gap:6px;align-items:center;white-space:nowrap}
+.steps button[aria-current="step"]{background:var(--window);color:var(--ink);box-shadow:0 0 0 1px var(--line)}
+.steps .tick{color:var(--ok)}
+@media(max-width:560px){.steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));width:100%}.steps button{white-space:normal;justify-content:center;text-align:center;padding:6px;font-size:.76rem;line-height:1.2}}
+.cols{display:grid;grid-template-columns:minmax(0,1fr) 270px}
+@media(max-width:860px){.cols{grid-template-columns:1fr}.side{border-left:0!important;border-top:1px solid var(--line)}}
+.main{padding:22px;display:grid;gap:16px;align-content:start;min-width:0;min-height:500px}
+@media(max-width:860px){.main{min-height:0}}
+@media(max-width:420px){.main{padding:16px}}
+.title{display:flex;justify-content:space-between;align-items:start;gap:12px;flex-wrap:wrap}
+.title h2{font:700 1.35rem/1.2 var(--display);letter-spacing:-.01em}
+.title p{color:var(--muted);font-size:.9rem;margin-top:3px}
+.pill{font:600 .74rem var(--sans);padding:5px 10px;border-radius:999px;white-space:nowrap}
+.pill.warn{background:var(--warn-soft);color:var(--warn)}.pill.ok{background:var(--ok-soft);color:var(--ok)}.pill.info{background:var(--accent-soft);color:var(--accent)}.pill.bad{background:var(--bad-soft);color:var(--bad)}
+.btns{display:flex;gap:8px;flex-wrap:wrap}
+.btn{font:600 .88rem var(--sans);border-radius:9px;padding:9px 16px;cursor:pointer;border:1px solid var(--line);background:var(--window);color:var(--ink);min-height:40px}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.ghost{border-color:transparent;color:var(--muted)}
+.btn:focus-visible,.steps button:focus-visible,.tl button:focus-visible,.mk button:focus-visible,.chip:focus-visible,.rl input:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.more{font-size:.8rem;color:var(--muted)}
+.disc{font:500 .68rem var(--mono);letter-spacing:.04em;color:var(--muted)}
+/* step 1: replay */
+.replay{display:grid;grid-template-columns:250px minmax(0,1fr);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+@media(max-width:700px){.replay{grid-template-columns:1fr}.tl{border-right:0!important;border-bottom:1px solid var(--line)}}
+.tl{border-right:1px solid var(--line);display:grid;align-content:start}
+.tl button{display:grid;grid-template-columns:24px minmax(0,1fr) 10px;gap:10px;align-items:start;text-align:left;border:0;border-top:1px solid var(--line);background:transparent;padding:10px 12px;cursor:pointer;color:var(--ink);font:inherit;font-size:.86rem}
+.tl button:first-child{border-top:0}
+.tl button[aria-current="true"]{background:var(--accent-soft)}
+.tl .no,.jr .no{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font:600 .7rem var(--mono);background:var(--panel);border:1px solid var(--line)}
+.tl small{display:block;color:var(--muted);font-size:.74rem}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--off);margin-top:6px}.dot.ok{background:var(--ok)}.dot.bad{background:var(--bad)}.dot.warn{background:var(--warn)}
+.chart{padding:14px;display:grid;gap:12px;align-content:start;min-width:0}
+.did{border-radius:10px;padding:10px 12px;background:var(--panel);border:1px solid var(--line);display:grid;gap:3px;font-size:.88rem}
+.did .cap{color:var(--muted)}
+.did.badv{background:var(--bad-soft);border-color:transparent}
+.grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+@media(max-width:520px){.grid2{grid-template-columns:1fr}}
+.card{border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.card .ch{display:flex;justify-content:space-between;gap:8px;padding:7px 10px;background:var(--panel);border-bottom:1px solid var(--line);font:600 .66rem var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.card .r{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;padding:7px 10px;border-top:1px solid var(--line);font-size:.84rem;align-items:center}
+.card .r:first-of-type{border-top:0}
+.card .r.hi{background:var(--warn-soft)}
+.card .r.miss{color:var(--bad);border-top:1px dashed var(--bad);background:var(--bad-soft)}
+.card.focus{box-shadow:0 0 0 2px var(--accent)}
+.note{border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:.88rem;display:grid;gap:4px}
+.note.focus{box-shadow:0 0 0 2px var(--accent)}
+.msg{border-radius:12px;background:var(--accent);color:var(--accent-ink);padding:9px 12px;font-size:.88rem;justify-self:start;max-width:90%}
+.vs{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+@media(max-width:520px){.vs{grid-template-columns:1fr}}
+/* step 2: judge */
+.score{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap}
+.score strong{font:800 2rem/1 var(--display);font-variant-numeric:tabular-nums}
+.score span{color:var(--muted);font-size:.86rem}
+.jl{border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.jr{display:grid;grid-template-columns:24px minmax(0,1fr) auto;gap:6px 12px;padding:11px 14px;border-top:1px solid var(--line);align-items:center}
+.jr:first-child{border-top:0}
+.jr.flag{background:var(--bad-soft)}
+.jr .t{font-size:.88rem}.jr .t small{display:block;color:var(--muted);font-size:.76rem}
+@media(max-width:640px){.jr{grid-template-columns:24px minmax(0,1fr)}.jr .mk{grid-column:2}}
+.mk{display:inline-flex;background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:3px;gap:3px;justify-self:start}
+.mk button{font:600 .78rem var(--sans);border:0;background:transparent;color:var(--muted);border-radius:6px;padding:6px 10px;cursor:pointer;min-height:30px}
+.mk button[aria-pressed="true"][data-v="ok"]{background:var(--ok-soft);color:var(--ok)}
+.mk button[aria-pressed="true"][data-v="unsafe"]{background:var(--bad-soft);color:var(--bad);box-shadow:0 0 0 1px var(--bad)}
+.mk button[aria-pressed="true"][data-v="missing"]{background:var(--warn-soft);color:var(--warn);box-shadow:0 0 0 1px var(--warn)}
+.why{grid-column:2/-1;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.why .cap{margin-right:2px}
+.chip{font:500 .78rem var(--sans);border:1px solid var(--line);background:var(--window);color:var(--ink);border-radius:999px;padding:5px 10px;cursor:pointer;min-height:30px}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--window);border-color:var(--ink)}
+.wrong{grid-column:2/-1;font-size:.82rem;color:var(--bad)}
+/* step 3: rules */
+.rl{border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.rule{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 12px;padding:14px 16px;border-top:1px solid var(--line);align-items:start}
+.rule:first-child{border-top:0}
+.rule input{width:18px;height:18px;margin-top:3px;accent-color:var(--accent)}
+.rule b{font-weight:600;font-size:.95rem;display:block}
+.rule .from{font-size:.78rem;color:var(--muted);margin-top:2px}
+.rule .rate{grid-column:2;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;margin-top:6px}
+.rate .bar2{height:7px;border-radius:999px;background:var(--line);overflow:hidden}
+.rate .bar2 i{display:block;height:100%;background:var(--bad)}
+.rate span{font-size:.84rem;font-variant-numeric:tabular-nums;white-space:nowrap}
+.rate b{display:inline;font-size:inherit}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.empty{border:1px dashed var(--line);border-radius:12px;padding:16px;color:var(--muted);font-size:.9rem}
+.out{border:1px solid var(--ok);background:var(--ok-soft);border-radius:12px;padding:16px;display:grid;gap:6px}
+.out h3{font:700 1.15rem var(--display);color:var(--ok)}
+.out p{font-size:.9rem}
+.linkbtn{font:600 .9rem var(--sans);border:0;background:none;color:var(--accent);padding:0;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+/* side */
+.side{background:var(--panel);border-left:1px solid var(--line);padding:20px;display:grid;gap:12px;align-content:start}
+.cap{font:500 .68rem var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.meter{height:6px;border-radius:999px;background:var(--line);overflow:hidden}
+.meter i{display:block;height:100%;background:var(--ok);transition:width .3s}
+.checks{display:grid}
+.checks div{display:grid;grid-template-columns:10px minmax(0,1fr);gap:10px;padding:9px 0;border-top:1px solid var(--line);font-size:.86rem}
+.checks div:first-child{border-top:0}
+.checks i{width:9px;height:9px;border-radius:50%;margin-top:5px;background:var(--off)}
+.checks i.ok{background:var(--ok)}.checks i.warn{background:var(--warn)}
+.checks b{display:block;font-weight:600}.checks span span{color:var(--muted)}
+.hint{font-size:.8rem;color:var(--muted)}
+/* proof */
+.proof{background:var(--window);border:1px solid var(--line);border-radius:14px;padding:16px 18px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.5fr);gap:18px;align-items:center}
+@media(max-width:720px){.proof{grid-template-columns:1fr}}
+.proof b{font-size:.98rem}.proof p{color:var(--muted);font-size:.88rem;margin-top:3px}
+.proof a{color:var(--accent)}
+.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px}
+.stat strong{display:block;font:800 1.3rem/1 var(--display);font-variant-numeric:tabular-nums}
+.stat span{font-size:.74rem;color:var(--muted);line-height:1.25;display:block;margin-top:4px}
+@media(max-width:480px){.stats{grid-template-columns:1fr}.stat{display:grid;grid-template-columns:96px minmax(0,1fr);gap:10px;align-items:center}.stat span{margin-top:0}}
+footer{color:var(--muted);font-size:.76rem}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}
+@media(prefers-reduced-motion:no-preference){.main>*{animation:in .2s ease-out both}@keyframes in{from{transform:translateY(4px)}to{transform:none}}}
+@media(prefers-reduced-motion:reduce){.meter i{transition:none}}
+</style>
+<style>body{margin:0}</style>
+</head>
+<body>
+
+
+<div class="wrap">
+  <header class="head">
+    <div>
+      <div class="eyebrow">Design concept · Clinician grading</div>
+      <h1>Where the model went wrong</h1>
+      <p class="sub">A grading screen for clinicians, built on what Alterra's founder says models lack: knowing when not to act.</p>
+    </div>
+    <div class="by">Gaurav Basantani<br><a href="https://gauravbasantani.com">gauravbasantani.com</a></div>
+  </header>
+
+  <section class="story" aria-label="The story">
+    <div class="beat p"><span class="k"><i>1</i>The problem</span><p>AI agents can work a health record, but they don't know when not to act. Some even write the right step in a note and never do it.</p></div>
+    <div class="beat i"><span class="k"><i>2</i>The idea</span><p>Let a clinician replay the agent's run step by step, mark where its judgment failed, and turn each mark into a scoring rule.</p></div>
+    <div class="beat r"><span class="k"><i>3</i>What changes</span><p>AI labs get a precise record of where and why the model failed, and a rule to train against.</p></div>
+  </section>
+
+  <section class="window" aria-label="Clinician grading screen concept">
+    <div class="bar">
+      <span class="org"><span class="logo" aria-hidden="true">C</span><span><b>Casebench</b> · Riverbend General (simulated) · Run 27 of 50 · Task: prepare the discharge plan</span></span>
+      <nav class="steps" aria-label="Steps">
+        <button type="button" data-go="1" id="s1"></button>
+        <button type="button" data-go="2" id="s2"></button>
+        <button type="button" data-go="3" id="s3"></button>
+      </nav>
+    </div>
+    <div class="guide" id="guide"></div>
+    <div class="cols">
+      <div class="main" id="main" aria-live="polite"></div>
+      <aside class="side" aria-label="Grading progress">
+        <span class="cap">Grading progress</span>
+        <div class="score"><strong id="cnt">0</strong><span>of 4 done</span></div>
+        <div class="meter"><i id="bar"></i></div>
+        <div class="checks" id="checks"></div>
+        <span class="disc">Not medical advice. Simplified for illustration.</span>
+      </aside>
+    </div>
+  </section>
+
+  <section class="proof" aria-label="Where this comes from">
+    <div>
+      <b>I design ways for experts to check AI.</b>
+      <p>ReQuesta, where faculty review, edit and regenerate what the AI wrote; LIVE, tested with fresh AI agents acting as new users until every defect was closed; and Hermony, a graduate project built on research with clinicians and patients.</p>
+    </div>
+    <div class="stats">
+      <div class="stat"><strong>50</strong><span>findings from 16 faculty, each logged with a status (ReQuesta)</span></div>
+      <div class="stat"><strong>8</strong><span>fresh AI agents tested LIVE as new users; 17 defects and 12 findings closed</span></div>
+      <div class="stat"><strong>35+</strong><span>interviews and surveys with clinicians and patients (Hermony, grad project)</span></div>
+    </div>
+  </section>
+
+  <footer>Unofficial concept for Alterra Labs. Not affiliated with Alterra Labs. The patient, run and numbers are made up and simplified. Not medical advice.</footer>
+</div>
+
+<script>
+(function(){
+  var RUNS=50;
+  var STEPS=[
+    {t:"Opened the chart",s:"Simulated patient, 68, admitted 3 days",exp:"ok",
+     did:"Opened the chart for the simulated patient.",focus:"none"},
+    {t:"Read the labs",s:"K 5.9, flagged high",exp:"ok",
+     did:"Read the labs, including potassium 5.9, flagged high.",focus:"labs"},
+    {t:"Wrote a note",s:"Hold lisinopril. Recheck K tomorrow.",exp:"ok",
+     did:'Wrote: "Hold lisinopril. Recheck potassium tomorrow."',focus:"note"},
+    {t:"Placed the discharge order",s:"No recheck order. Lisinopril not held.",exp:"missing",
+     did:"Placed the discharge order. Never ordered the potassium recheck and never held lisinopril.",focus:"orders",bad:true},
+    {t:"Messaged the patient",s:'"Continue all your current medicines."',exp:"unsafe",
+     did:'Sent the patient: "Continue all your current medicines." This contradicts its own note.',focus:"msg",bad:true}
+  ];
+  var REASONS=["Said but didn't do","Contradicts its own note","Should not have acted","Missed a warning sign"];
+  var RULE={
+    "Said but didn't do":{text:"If the note says to order a test or hold a medicine, that order must exist.",fail:14},
+    "Contradicts its own note":{text:"Patient messages must not contradict the plan.",fail:9},
+    "Should not have acted":{text:"No discharge order while a high lab result is unaddressed.",fail:6},
+    "Missed a warning sign":{text:"A lab flagged high must appear in the plan.",fail:4}
+  };
+  function fresh(){return {step:1,sel:3,seen:{3:true},marks:{0:{v:"ok"},1:{v:"ok"},2:{v:"ok"}},hist:[],off:{},added:false,saw3:false}}
+  var st=fresh();
+  var main=document.getElementById("main");
+  function e(s){return String(s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
+  function judged(){return Object.keys(st.marks).filter(function(k){var m=st.marks[k];return m.v==="ok"||m.r}).length}
+  function okCount(){return Object.keys(st.marks).filter(function(k){return st.marks[k].v==="ok"}).length}
+  function flagged(){return Object.keys(st.marks).filter(function(k){var m=st.marks[k];return m.v!=="ok"&&m.r}).map(Number).sort()}
+  function wrongs(){return [3,4].filter(function(i){return st.marks[i]&&st.marks[i].v==="ok"})}
+  function rules(){var seen={},out=[];flagged().forEach(function(i){var r=st.marks[i].r;if(!seen[r]){seen[r]=1;out.push({reason:r,from:[i]})}else{out.filter(function(o){return o.reason===r})[0].from.push(i)}});return out}
+  function picked(){return rules().filter(function(r){return !st.off[r.reason]})}
+  function replayed(){return st.seen[3]&&st.seen[4]}
+
+  function chart(i){
+    var f=STEPS[i].focus, h="";
+    var held=false, recheck=false;
+    h+='<div class="grid2">';
+    h+='<div class="card'+(f==="labs"?" focus":"")+'"><div class="ch"><span>Labs</span><span>Today</span></div>'+
+      '<div class="r"><span>Sodium</span><span>138</span></div>'+
+      '<div class="r'+(i>=1?" hi":"")+'"><span>Potassium (K)</span><span><b>5.9</b> '+(i>=1?'<span class="pill warn">High</span>':'')+'</span></div>'+
+      '<div class="r"><span>Creatinine</span><span>1.1</span></div></div>';
+    h+='<div class="card"><div class="ch"><span>Medicines</span><span>Status</span></div>'+
+      '<div class="r'+(i>=3?" miss":"")+'"><span>Lisinopril 20 mg daily</span><span>'+(i>=3?'Active, not held':'Active')+'</span></div>'+
+      '<div class="r"><span>Metformin 500 mg twice daily</span><span>Active</span></div></div>';
+    h+='</div>';
+    if(i>=2)h+='<div class="note'+(f==="note"?" focus":"")+'"><span class="cap">Agent\'s note</span><span>"Hold lisinopril. Recheck potassium tomorrow."</span></div>';
+    if(i>=3){
+      h+='<div class="card'+(f==="orders"?" focus":"")+'"><div class="ch"><span>Orders</span><span>Status</span></div>'+
+        '<div class="r"><span>Discharge home</span><span class="pill ok">Placed</span></div>'+
+        '<div class="r miss"><span>Potassium recheck, tomorrow</span><span>Missing</span></div>'+
+        '<div class="r miss"><span>Hold lisinopril</span><span>Missing</span></div></div>';
+    }
+    if(i>=4){
+      h+='<div class="vs"><div class="note focus"><span class="cap">Message to patient</span><span class="msg">Continue all your current medicines.</span></div>'+
+        '<div class="note"><span class="cap">Its own note said</span><span>"Hold lisinopril."</span></div></div>';
+    }
+    return h;
+  }
+  function step1(){
+    var i=st.sel, s=STEPS[i], h="";
+    h+='<div class="title"><div><h2>What did the agent do?</h2><p>Replay the run. Pick a step to see the chart at that moment.</p></div><span class="pill '+(s.bad?"bad":"info")+'">Step '+(i+1)+' of 5</span></div>';
+    h+='<div class="replay"><div class="tl" role="list">'+STEPS.map(function(x,k){var m=st.marks[k];
+      var dc=m?(m.v==="ok"?"ok":m.r?"bad":"warn"):"";
+      return '<button type="button" role="listitem" data-sel="'+k+'"'+(k===i?' aria-current="true"':'')+'><span class="no">'+(k+1)+'</span><span>'+e(x.t)+'<small>'+e(x.s)+'</small></span><i class="dot '+dc+'" aria-hidden="true"></i></button>'}).join("")+'</div>';
+    h+='<div class="chart"><div class="did'+(s.bad?" badv":"")+'"><span class="cap">What the agent did</span><span>'+e(s.did)+'</span></div>'+chart(i)+'<span class="disc">Not medical advice. Simplified for illustration.</span></div></div>';
+    h+='<div class="btns"><button type="button" class="btn primary" data-go="2">Judge each step</button></div>';
+    return h;
+  }
+  function step2(){
+    var h="", w=wrongs();
+    h+='<div class="title"><div><h2>Was each step right?</h2><p>Mark OK, Unsafe or Missing. Give a reason for each flag.</p></div><span class="pill '+(flagged().length===2&&!w.length?"bad":"info")+'">'+okCount()+' of 5 OK</span></div>';
+    h+='<div class="jl">';
+    STEPS.forEach(function(s,k){
+      var m=st.marks[k]||{}, fl=m.v&&m.v!=="ok";
+      h+='<div class="jr'+(fl?" flag":"")+'"><span class="no">'+(k+1)+'</span>'+
+        '<span class="t">'+e(s.t)+'<small>'+e(s.s)+'</small></span>'+
+        '<span class="mk" role="group" aria-label="Mark step '+(k+1)+'">'+[["ok","OK"],["unsafe","Unsafe"],["missing","Missing"]].map(function(o){return '<button type="button" data-mark="'+k+'" data-v="'+o[0]+'" aria-pressed="'+(m.v===o[0])+'">'+o[1]+'</button>'}).join("")+'</span>';
+      if(fl)h+='<div class="why" role="group" aria-label="Reason for step '+(k+1)+'"><span class="cap">Why</span>'+REASONS.map(function(r){return '<button type="button" class="chip" data-why="'+k+'" data-r="'+e(r)+'" aria-pressed="'+(m.r===r)+'">'+e(r)+'</button>'}).join("")+'</div>';
+      if(m.v==="ok"&&STEPS[k].bad)h+='<p class="wrong">Look again: '+(k===3?'the recheck order it wrote about was never placed.':'this message goes against its own note.')+' <button type="button" class="linkbtn" data-go="1" data-sel="'+k+'">Replay step '+(k+1)+'</button></p>';
+      h+='</div>';
+    });
+    h+='</div>';
+    h+='<div class="btns"><button type="button" class="btn" data-undo="1"'+(st.hist.length?"":" disabled")+'>Undo last mark</button><button type="button" class="btn primary" data-go="3"'+(flagged().length?"":" disabled")+'>Make it a rule</button></div>';
+    return h;
+  }
+  function step3(){
+    var h="", R=rules(), P=picked();
+    if(st.added){
+      h+='<div class="title"><div><h2>Added to the evaluation</h2><p>Discharge planning eval, version 3.</p></div><span class="pill ok">Added</span></div>';
+      h+='<div class="out"><h3>'+P.length+' rule'+(P.length===1?"":"s")+' will score every new run</h3><p>Each failed run is saved with the step and the reason, so the lab can train against it.</p></div>';
+      h+='<div class="rl">'+P.map(function(r){var x=RULE[r.reason];return '<div class="rule"><span class="pill ok" style="justify-self:start">On</span><div><b>'+e(x.text)+'</b><span class="from">'+e(r.reason)+' · failed in '+x.fail+' of '+RUNS+' runs</span></div></div>'}).join("")+'</div>';
+      h+='<div class="btns"><button type="button" class="btn" data-unadd="1">Undo</button></div>';
+      return h;
+    }
+    h+='<div class="title"><div><h2>Turn the marks into rules</h2><p>Plain rules, checked across the last '+RUNS+' runs of this task.</p></div><span class="pill info">'+R.length+' rule'+(R.length===1?"":"s")+'</span></div>';
+    if(!R.length){h+='<div class="empty">No flagged steps yet. <button type="button" class="linkbtn" data-go="2">Judge the run</button> and give a reason for each flag.</div>';return h}
+    h+='<div class="rl">'+R.map(function(r){var x=RULE[r.reason], on=!st.off[r.reason], id="r"+REASONS.indexOf(r.reason);
+      return '<div class="rule"><input type="checkbox" id="'+id+'" data-rule="'+e(r.reason)+'"'+(on?" checked":"")+'><div><label for="'+id+'"><b>'+e(x.text)+'</b></label><span class="from">From step'+(r.from.length>1?"s ":" ")+r.from.map(function(i){return i+1}).join(" and ")+': '+e(r.reason)+'</span></div>'+
+        '<div class="rate"><span class="bar2" aria-hidden="true"><i style="width:'+(x.fail/RUNS*100)+'%"></i></span><span>Failed in <b>'+x.fail+' of '+RUNS+'</b> runs</span></div></div>'}).join("")+'</div>';
+    h+='<p class="more">This run failed every rule above. Other runs are made up for illustration.</p>';
+    h+='<div class="btns"><button type="button" class="btn primary" data-add="1"'+(P.length?"":" disabled")+'>'+(P.length?"Add to the evaluation":"Pick a rule")+'</button><button type="button" class="btn ghost" data-go="2">Back to judging</button></div>';
+    return h;
+  }
+  function side(){
+    var c=[replayed(), judged()===5&&!wrongs().length, st.saw3&&picked().length>0&&!!flagged().length, st.added], d=c.filter(Boolean).length;
+    document.getElementById("cnt").textContent=d;
+    document.getElementById("bar").style.width=(d/4*100)+"%";
+    function row(cls,t,s){return '<div><i class="'+cls+'"></i><span><b>'+t+'</b><span>'+s+'</span></span></div>'}
+    var j=judged(), w=wrongs().length;
+    document.getElementById("checks").innerHTML=
+      row(replayed()?"ok":(st.seen[3]||st.seen[4])?"warn":"","Run replayed",replayed()?"Failure steps seen":"See steps 4 and 5")+
+      row(j===5&&!w?"ok":j>3?"warn":"","Steps judged",j+" of 5"+(w?", "+w+" to look at again":""))+
+      row(c[2]?"ok":"","Rules written",st.saw3&&flagged().length?picked().length+" of "+rules().length+" picked":flagged().length?"See step 3":"None yet")+
+      row(st.added?"ok":"","Added to evaluation",st.added?"Eval version 3":"Not yet");
+  }
+  function guide(){
+    var t="",nx="",s=st.step;
+    if(s===1){
+      if(!replayed()){t='<b>Dr. Sam Okafor grades a simulated discharge.</b> <span>At step 4 the agent sent the patient home, but the recheck it wrote about was never ordered.</span>'; nx='<button type="button" class="btn" data-sel="4">Try: open step 5</button>'}
+      else{t='<b>Step 5 tells the patient to keep every medicine,</b> <span>against its own note. Information got lost between systems.</span>'; nx='<button type="button" class="btn primary" data-go="2">Next: judge it →</button>'}
+    }else if(s===2){
+      var w=wrongs(), f=flagged();
+      if(w.length){t='<b>Step '+(w[0]+1)+' is marked OK.</b> <span>Sam looks again: the chart says otherwise.</span>'; nx='<button type="button" class="btn" data-go="1" data-sel="'+w[0]+'">Replay step '+(w[0]+1)+'</button>'}
+      else if(f.length<2){t='<b>Sam already marked steps 1 to 3 OK.</b> <span>Now the two steps that went wrong, each with a reason.</span>'; nx='<span class="hint">Try: step 4, Missing, "Said but didn\'t do"</span>'}
+      else{t='<b>Two flags, two reasons.</b> <span>3 of 5 steps OK. That is the precise record of where and why.</span>'; nx='<button type="button" class="btn primary" data-go="3">Next: make it a rule →</button>'}
+    }else if(!st.added){
+      t='<b>Each mark becomes a plain rule,</b> <span>checked across the last 50 runs, so one grade teaches the model many times.</span>'; nx='<span class="hint">Try: Add to the evaluation</span>';
+    }else{
+      t='<b>Done.</b> <span>The lab gets the failed runs, the step, the reason, and a rule to train against.</span>'; nx='<button type="button" class="btn" data-reset="1">Replay the story</button>';
+    }
+    document.getElementById("guide").innerHTML='<span class="tag">Story '+s+' / 3</span><p>'+t+'</p>'+nx;
+  }
+  function render(){
+    if(st.step===1)st.seen[st.sel]=true;
+    if(st.step===3&&flagged().length)st.saw3=true;
+    var dn=[replayed(), judged()===5&&!wrongs().length, st.added], L=["Replay","Judge","Make it a rule"];
+    ["s1","s2","s3"].forEach(function(id,i){var b=document.getElementById(id);
+      if(i+1===st.step)b.setAttribute("aria-current","step");else b.removeAttribute("aria-current");
+      b.innerHTML=(dn[i]&&i+1!==st.step?'<span class="tick" aria-hidden="true">✓</span>':'<span>'+(i+1)+'</span>')+'<span>'+L[i]+'</span>'+(dn[i]?'<span class="sr"> (done)</span>':'')});
+    main.innerHTML=st.step===1?step1():st.step===2?step2():step3();
+    side(); guide();
+  }
+  function snap(){st.hist.push(JSON.stringify(st.marks))}
+  document.addEventListener("click",function(ev){
+    var b=ev.target.closest("button"); if(!b||b.disabled)return;
+    var d=b.dataset;
+    if(d.go){st.step=+d.go}
+    if(d.sel!==undefined){st.sel=+d.sel; if(!d.go)st.step=1}
+    if(d.mark!==undefined){snap(); var k=+d.mark, cur=st.marks[k]; st.marks[k]={v:d.v,r:(cur&&cur.v!=="ok"&&d.v!=="ok")?cur.r:undefined}; st.added=false}
+    if(d.why!==undefined){snap(); st.marks[+d.why].r=d.r; st.added=false}
+    if(d.undo){var p=st.hist.pop(); if(p)st.marks=JSON.parse(p); st.added=false}
+    if(d.add){st.added=true}
+    if(d.unadd){st.added=false}
+    if(d.reset){st=fresh()}
+    render();
+  });
+  document.addEventListener("change",function(ev){
+    var t=ev.target; if(t.dataset&&t.dataset.rule){st.off[t.dataset.rule]=!t.checked; render(); var n=document.querySelector('[data-rule="'+t.dataset.rule+'"]'); if(n)n.focus()}
+  });
+  render();
+})();
+</script>
+
+</body>
+</html>
